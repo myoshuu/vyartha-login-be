@@ -3,7 +3,7 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
-import { SQL } from 'bun';
+import mysql from 'mysql2/promise';
 
 const app = express();
 const PORT = 3000;
@@ -12,7 +12,7 @@ const MAX_ATTEMPTS = 5;
 const COOLDOWN_MS = 30 * 60 * 1000;
 
 const dbUrl = process.env.DATABASE_URL || 'mysql://root:password@localhost:3306/growtopia';
-const db = new SQL(dbUrl);
+const pool = mysql.createPool(dbUrl);
 
 const ipAttempts = new Map<string, { count: number; blockedUntil: number }>();
 
@@ -178,7 +178,7 @@ app.all(
         return;
       }
 
-      const rows = await db`SELECT * FROM peer WHERE growid = ${growId} LIMIT 1`;
+      const [rows] = await pool.query('SELECT * FROM peer WHERE growid = ? LIMIT 1', [growId]) as any;
 
       if (rows.length === 0) {
         const attemptsLeft = recordFailedAttempt(clientIp);
