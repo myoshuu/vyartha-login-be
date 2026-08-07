@@ -1,0 +1,13 @@
+node_modules
+.git
+.gitignore
+.env
+.env.example
+*.md
+.vercel
+Dockerfile
+docker-compose.yml
+bun.lockb
+tsconfig.json
+README.md
+LICENSE

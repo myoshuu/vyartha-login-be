@@ -1,0 +1,18 @@
+services:
+  login-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vyartha-login-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - dokploy网络
+
+networks:
+  dokploy网络:
+    external: true
