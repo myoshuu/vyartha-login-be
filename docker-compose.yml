@@ -10,24 +10,9 @@ services:
     environment:
       - PORT=3000
       - DATABASE_URL=${DATABASE_URL}
-    networks:
-      - dokploy网络
-
-  nginx:
-    image: nginx:alpine
-    container_name: vyartha-login-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
-    depends_on:
-      - login-backend
-    networks:
-      - dokploy网络
-
-networks:
-  dokploy网络:
-    external: true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vyartha-login.rule=Host(`vyartha-login.ratival.com`)"
+      - "traefik.http.routers.vyartha-login.entrypoints=websecure"
+      - "traefik.http.routers.vyartha-login.tls=true"
+      - "traefik.http.services.vyartha-login.loadbalancer.server.port=3000"
