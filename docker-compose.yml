@@ -5,14 +5,21 @@ services:
       dockerfile: Dockerfile
     container_name: vyartha-login-backend
     restart: unless-stopped
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
     environment:
       - PORT=3000
       - DATABASE_URL=${DATABASE_URL}
+    networks:
+      - shared-net
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.vyartha-login.rule=Host(`vyartha-login.ratival.com`)"
+      - "traefik.http.routers.vyartha-login.rule=Host(`vyartha-login.ratival.com`,`www.vyartha-login.ratival.com`)"
       - "traefik.http.routers.vyartha-login.entrypoints=websecure"
       - "traefik.http.routers.vyartha-login.tls=true"
-      - "traefik.http.services.vyartha-login.loadbalancer.server.port=3000"
+      - "traefik.http.routers.vyartha-login.service=vyartha-login-service"
+      - "traefik.http.services.vyartha-login-service.loadbalancer.server.port=3000"
+
+networks:
+  shared-net:
+    external: true
