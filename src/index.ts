@@ -289,9 +289,136 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
   }
 });
 
-// @note checktoken redirect
-app.all('/player/growid/checktoken', ({ redirect }) => {
-  return redirect('/player/growid/validate/checktoken', 307);
+// @note checktoken endpoint - validates token and returns updated token
+app.post('/player/growid/checktoken', async ({ body, request }) => {
+  try {
+    let refreshToken: string | undefined;
+    let clientData: string | undefined;
+
+    if (body && typeof body === 'object') {
+      const bodyObj = body as Record<string, string>;
+
+      if ('refreshToken' in bodyObj || 'clientData' in bodyObj) {
+        refreshToken = bodyObj.refreshToken;
+        clientData = bodyObj.clientData;
+      } else if (Object.keys(bodyObj).length === 1) {
+        const rawPayload = Object.keys(bodyObj)[0];
+        const params = new URLSearchParams(rawPayload);
+        refreshToken = params.get('refreshToken') || undefined;
+        clientData = params.get('clientData') || undefined;
+      }
+    } else if (typeof body === 'string' && body.length > 0) {
+      const params = new URLSearchParams(body);
+      refreshToken = params.get('refreshToken') || undefined;
+      clientData = params.get('clientData') || undefined;
+    }
+
+    console.log(`[CHECKTOKEN] refreshToken: ${refreshToken}, clientData: ${clientData}`);
+
+    if (!refreshToken || !clientData) {
+      console.log(`[ERROR]: Missing refreshToken or clientData`);
+      return new Response(JSON.stringify({ status: 'error', message: 'Missing refreshToken or clientData' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    let decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
+
+    // @note remove &reg=0/1 from decodedRefreshToken if available
+    if (decodedRefreshToken.includes('&reg=0')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=0', '');
+    } else if (decodedRefreshToken.includes('&reg=1')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=1', '');
+    }
+
+    const token = Buffer.from(
+      decodedRefreshToken.replace(
+        /(_token=)[^&]*/,
+        `$1${Buffer.from(clientData).toString('base64')}`,
+      ),
+    ).toString('base64');
+
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'Account Validated.',
+      token,
+      url: '',
+      accountType: 'growtopia',
+      accountAge: 2,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.log(`[ERROR]: ${error}`);
+    return new Response(JSON.stringify({ status: 'error', message: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+});
+
+// @note checktoken endpoint - same as above, for backward compatibility
+app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
+  try {
+    let refreshToken: string | undefined;
+    let clientData: string | undefined;
+
+    if (body && typeof body === 'object') {
+      const bodyObj = body as Record<string, string>;
+
+      if ('refreshToken' in bodyObj || 'clientData' in bodyObj) {
+        refreshToken = bodyObj.refreshToken;
+        clientData = bodyObj.clientData;
+      } else if (Object.keys(bodyObj).length === 1) {
+        const rawPayload = Object.keys(bodyObj)[0];
+        const params = new URLSearchParams(rawPayload);
+        refreshToken = params.get('refreshToken') || undefined;
+        clientData = params.get('clientData') || undefined;
+      }
+    } else if (typeof body === 'string' && body.length > 0) {
+      const params = new URLSearchParams(body);
+      refreshToken = params.get('refreshToken') || undefined;
+      clientData = params.get('clientData') || undefined;
+    }
+
+    if (!refreshToken || !clientData) {
+      return new Response(JSON.stringify({ status: 'error', message: 'Missing refreshToken or clientData' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    let decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
+
+    if (decodedRefreshToken.includes('&reg=0')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=0', '');
+    } else if (decodedRefreshToken.includes('&reg=1')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=1', '');
+    }
+
+    const token = Buffer.from(
+      decodedRefreshToken.replace(
+        /(_token=)[^&]*/,
+        `$1${Buffer.from(clientData).toString('base64')}`,
+      ),
+    ).toString('base64');
+
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'Account Validated.',
+      token,
+      url: '',
+      accountType: 'growtopia',
+      accountAge: 2,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.log(`[ERROR]: ${error}`);
+    return new Response(JSON.stringify({ status: 'error', message: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 });
 
 // @note sync/register endpoint - called by Growtopia Server when user auto-creates
