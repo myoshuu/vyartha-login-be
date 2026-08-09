@@ -89,7 +89,11 @@ app.post('/player/login/dashboard', async ({ request }) => {
     clientData = _token;
   } else {
     // @note Otherwise, use the raw body as client data
-    clientData = bodyText;
+    try {
+      clientData = decodeURIComponent(bodyText);
+    } catch (e) {
+      clientData = bodyText;
+    }
   }
 
   console.log(`[DASHBOARD] clientData length: ${clientData.length}`);
