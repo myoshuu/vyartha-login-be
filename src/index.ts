@@ -73,16 +73,26 @@ app.get('/', () => {
 });
 
 // @note dashboard endpoint - serves login HTML page with client data
-app.post('/player/login/dashboard', async ({ body, request }) => {
+app.post('/player/login/dashboard', async ({ request }) => {
   let clientData = '';
 
-  if (body && typeof body === 'object') {
-    const bodyObj = body as Record<string, string>;
-    const keys = Object.keys(bodyObj);
-    if (keys.length > 0) {
-      clientData = keys[0];
-    }
+  // @note Read body manually
+  const bodyText = await request.text();
+  console.log(`[DASHBOARD] Body: ${bodyText.substring(0, 100)}...`);
+
+  // @note Parse as URLSearchParams
+  const params = new URLSearchParams(bodyText);
+  const _token = params.get('_token') || '';
+
+  if (_token) {
+    // @note If _token exists, use it directly
+    clientData = _token;
+  } else {
+    // @note Otherwise, use the raw body as client data
+    clientData = bodyText;
   }
+
+  console.log(`[DASHBOARD] clientData length: ${clientData.length}`);
 
   const encodedClientData = Buffer.from(clientData).toString('base64');
   const templatePath = path.join(process.cwd(), 'template', 'dashboard.html');
@@ -95,7 +105,7 @@ app.post('/player/login/dashboard', async ({ body, request }) => {
 });
 
 // @note validate login endpoint (handles both login and register)
-app.post('/player/growid/login/validate', async ({ body, request }) => {
+app.post('/player/growid/login/validate', async ({ request }) => {
   const clientIp = getClientIp(request);
 
   const { blocked } = checkIpBlocked(clientIp);
@@ -114,12 +124,18 @@ app.post('/player/growid/login/validate', async ({ body, request }) => {
   }
 
   try {
-    const bodyObj = body as Record<string, string>;
-    const email = bodyObj.email;
-    const _token = bodyObj._token;
-    const growId = bodyObj.growId;
-    const password = bodyObj.password;
-    const passwordConfirmation = bodyObj.password_confirmation;
+    // @note Read body manually
+    const bodyText = await request.text();
+    const params = new URLSearchParams(bodyText);
+
+    const email = params.get('email') || undefined;
+    const _token = params.get('_token') || '';
+    const growId = params.get('growId') || '';
+    const password = params.get('password') || '';
+    const passwordConfirmation = params.get('password_confirmation') || '';
+
+    console.log(`[LOGIN] Body: ${bodyText.substring(0, 100)}...`);
+    console.log(`[LOGIN] Parsed - email: ${email ? 'yes' : 'no'}, growId: ${growId}, _token length: ${_token.length}`);
 
     // @note Registration flow (when email is present)
     if (email) {
