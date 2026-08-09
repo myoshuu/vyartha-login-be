@@ -1,5 +1,8 @@
 FROM oven/bun:1-alpine
 
+# @note install bash for Dokploy terminal
+RUN apk add --no-cache bash
+
 WORKDIR /app
 
 # @note install dependencies first (cached layer)
