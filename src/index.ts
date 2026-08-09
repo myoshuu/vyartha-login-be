@@ -290,40 +290,17 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
 });
 
 // @note checktoken endpoint - validates token and returns updated token
-app.post('/player/growid/checktoken', async ({ body, request }) => {
+app.post('/player/growid/checktoken', async ({ request }) => {
   try {
     let refreshToken: string | undefined;
     let clientData: string | undefined;
 
-    // @note Log raw body for debugging
-    console.log(`[CHECKTOKEN] Body type: ${typeof body}`);
-    console.log(`[CHECKTOKEN] Body: ${JSON.stringify(body)}`);
+    // @note Read body manually since Elysia doesn't auto-parse form data
+    const bodyText = await request.text();
+    console.log(`[CHECKTOKEN] Body: ${bodyText}`);
 
-    if (body && typeof body === 'object') {
-      const bodyObj = body as Record<string, string>;
-
-      // @note Try to find refreshToken and clientData directly
-      if (bodyObj['refreshToken']) {
-        refreshToken = bodyObj['refreshToken'];
-      }
-      if (bodyObj['clientData']) {
-        clientData = bodyObj['clientData'];
-      }
-
-      // @note If only one key, try parsing it as URLSearchParams format
-      if (!refreshToken && !clientData) {
-        const keys = Object.keys(bodyObj);
-        if (keys.length === 1) {
-          const rawPayload = keys[0];
-          console.log(`[CHECKTOKEN] Raw payload: ${rawPayload}`);
-          const params = new URLSearchParams(rawPayload);
-          refreshToken = params.get('refreshToken') || undefined;
-          clientData = params.get('clientData') || undefined;
-        }
-      }
-    } else if (typeof body === 'string' && body.length > 0) {
-      console.log(`[CHECKTOKEN] String body: ${body}`);
-      const params = new URLSearchParams(body);
+    if (bodyText) {
+      const params = new URLSearchParams(bodyText);
       refreshToken = params.get('refreshToken') || undefined;
       clientData = params.get('clientData') || undefined;
     }
@@ -374,25 +351,16 @@ app.post('/player/growid/checktoken', async ({ body, request }) => {
 });
 
 // @note checktoken endpoint - same as above, for backward compatibility
-app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
+app.post('/player/growid/validate/checktoken', async ({ request }) => {
   try {
     let refreshToken: string | undefined;
     let clientData: string | undefined;
 
-    if (body && typeof body === 'object') {
-      const bodyObj = body as Record<string, string>;
+    // @note Read body manually since Elysia doesn't auto-parse form data
+    const bodyText = await request.text();
 
-      if ('refreshToken' in bodyObj || 'clientData' in bodyObj) {
-        refreshToken = bodyObj.refreshToken;
-        clientData = bodyObj.clientData;
-      } else if (Object.keys(bodyObj).length === 1) {
-        const rawPayload = Object.keys(bodyObj)[0];
-        const params = new URLSearchParams(rawPayload);
-        refreshToken = params.get('refreshToken') || undefined;
-        clientData = params.get('clientData') || undefined;
-      }
-    } else if (typeof body === 'string' && body.length > 0) {
-      const params = new URLSearchParams(body);
+    if (bodyText) {
+      const params = new URLSearchParams(bodyText);
       refreshToken = params.get('refreshToken') || undefined;
       clientData = params.get('clientData') || undefined;
     }
