@@ -295,25 +295,40 @@ app.post('/player/growid/checktoken', async ({ body, request }) => {
     let refreshToken: string | undefined;
     let clientData: string | undefined;
 
+    // @note Log raw body for debugging
+    console.log(`[CHECKTOKEN] Body type: ${typeof body}`);
+    console.log(`[CHECKTOKEN] Body: ${JSON.stringify(body)}`);
+
     if (body && typeof body === 'object') {
       const bodyObj = body as Record<string, string>;
 
-      if ('refreshToken' in bodyObj || 'clientData' in bodyObj) {
-        refreshToken = bodyObj.refreshToken;
-        clientData = bodyObj.clientData;
-      } else if (Object.keys(bodyObj).length === 1) {
-        const rawPayload = Object.keys(bodyObj)[0];
-        const params = new URLSearchParams(rawPayload);
-        refreshToken = params.get('refreshToken') || undefined;
-        clientData = params.get('clientData') || undefined;
+      // @note Try to find refreshToken and clientData directly
+      if (bodyObj['refreshToken']) {
+        refreshToken = bodyObj['refreshToken'];
+      }
+      if (bodyObj['clientData']) {
+        clientData = bodyObj['clientData'];
+      }
+
+      // @note If only one key, try parsing it as URLSearchParams format
+      if (!refreshToken && !clientData) {
+        const keys = Object.keys(bodyObj);
+        if (keys.length === 1) {
+          const rawPayload = keys[0];
+          console.log(`[CHECKTOKEN] Raw payload: ${rawPayload}`);
+          const params = new URLSearchParams(rawPayload);
+          refreshToken = params.get('refreshToken') || undefined;
+          clientData = params.get('clientData') || undefined;
+        }
       }
     } else if (typeof body === 'string' && body.length > 0) {
+      console.log(`[CHECKTOKEN] String body: ${body}`);
       const params = new URLSearchParams(body);
       refreshToken = params.get('refreshToken') || undefined;
       clientData = params.get('clientData') || undefined;
     }
 
-    console.log(`[CHECKTOKEN] refreshToken: ${refreshToken}, clientData: ${clientData}`);
+    console.log(`[CHECKTOKEN] Parsed - refreshToken: ${refreshToken ? 'exists' : 'missing'}, clientData: ${clientData ? 'exists' : 'missing'}`);
 
     if (!refreshToken || !clientData) {
       console.log(`[ERROR]: Missing refreshToken or clientData`);
@@ -323,6 +338,7 @@ app.post('/player/growid/checktoken', async ({ body, request }) => {
     }
 
     let decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
+    console.log(`[CHECKTOKEN] Decoded refreshToken: ${decodedRefreshToken}`);
 
     // @note remove &reg=0/1 from decodedRefreshToken if available
     if (decodedRefreshToken.includes('&reg=0')) {
