@@ -5,8 +5,8 @@ import path from 'path';
 
 const app = new Elysia();
 
-// @note database setup
-const pool = mysql.createPool(process.env.DATABASE_URL || 'mysql://root:password@10.60.71.208:3306/growtopia');
+// @note Login Backend database (for tracking registrations synced from Growtopia Server)
+const pool = mysql.createPool(process.env.DATABASE_URL || 'mysql://root:password@localhost:3306/growtopia');
 
 // @note rate limiter
 const ipAttempts = new Map<string, { count: number; blockedUntil: number }>();
@@ -94,7 +94,7 @@ app.post('/player/login/dashboard', async ({ body, request }) => {
   });
 });
 
-// @note validate login endpoint
+// @note validate login endpoint (handles both login and register)
 app.post('/player/growid/login/validate', async ({ body, request }) => {
   const clientIp = getClientIp(request);
 
@@ -116,56 +116,86 @@ app.post('/player/growid/login/validate', async ({ body, request }) => {
   try {
     const bodyObj = body as Record<string, string>;
     const email = bodyObj.email;
+    const _token = bodyObj._token;
+    const growId = bodyObj.growId;
+    const password = bodyObj.password;
+    const passwordConfirmation = bodyObj.password_confirmation;
 
+    // @note Registration flow (when email is present)
     if (email) {
-      return new Response(JSON.stringify({ status: 'error', message: 'Email not allowed' }), {
+      // @note Validate required fields
+      if (!growId || !password || !passwordConfirmation) {
+        return new Response(JSON.stringify({ status: 'error', message: 'All fields are required' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // @note Validate password match
+      if (password !== passwordConfirmation) {
+        return new Response(JSON.stringify({ status: 'error', message: 'Passwords do not match' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // @note Validate GrowID format (alphanumeric, max 18 chars)
+      if (!/^[A-Za-z0-9]+$/.test(growId) || growId.length > 18) {
+        return new Response(JSON.stringify({ status: 'error', message: 'Invalid GrowID format' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      // @note Check if IP is blocked (too many registrations from same IP)
+      const { blocked, remaining } = checkIpBlocked(clientIp);
+      if (blocked) {
+        return new Response(JSON.stringify({
+          status: 'error',
+          message: 'Too many registration attempts. Please try again later.'
+        }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`[REGISTER] User registered: ${growId} (${email})`);
+
+      // @note Return success - Growtopia Server handles actual user creation
+      // The server will sync to login backend via /api/sync/register
+      const token = Buffer.from(
+        `_token=${_token}&growId=${growId}&password=${password}&reg=1`,
+      ).toString('base64');
+
+      return new Response(JSON.stringify({
+        status: 'success',
+        message: 'Account created successfully.',
+        token,
+        url: '',
+        accountType: 'growtopia',
+      }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const _token = bodyObj._token;
-    const growId = bodyObj.growId;
-    const password = bodyObj.password;
-
+    // @note Login flow (no email field)
     if (!growId || !password) {
       return new Response(JSON.stringify({ status: 'error', message: 'Missing growId or password' }), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const [rows]: any = await pool.query('SELECT * FROM peer WHERE growid = ? LIMIT 1', [growId]);
-
-    if (rows.length === 0) {
-      const attemptsLeft = recordFailedAttempt(clientIp);
-      const clientData = btoa(`${growId}`);
-      const errorMessage = `Account credentials missmatched. You have ${attemptsLeft} attempt(s) left.`;
-      const templatePath = path.join(process.cwd(), 'template', 'dashboard.html');
-      const templateContent = fs.readFileSync(templatePath, 'utf-8');
-      const errorHtml = `<div class="text-danger text-danger-wrapper"><ul><li>${errorMessage}</li></ul></div>`;
-      let htmlContent = templateContent.replace('{{ data }}', Buffer.from(clientData).toString('base64'));
-      htmlContent = htmlContent.replace('<div class="row div-content-center">', `${errorHtml}<div class="row div-content-center">`);
-
-      return new Response(htmlContent, {
-        headers: { 'Content-Type': 'text/html' },
+    // @note Check if IP is blocked
+    const { blocked } = checkIpBlocked(clientIp);
+    if (blocked) {
+      return new Response(JSON.stringify({
+        status: 'error',
+        message: 'Too many login attempts. Please try again in 30 minutes.'
+      }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const user = rows[0];
-    if (user.password !== password) {
-      const attemptsLeft = recordFailedAttempt(clientIp);
-      const clientData = btoa(`${growId}`);
-      const errorMessage = `Account credentials missmatched. You have ${attemptsLeft} attempt(s) left.`;
-      const templatePath = path.join(process.cwd(), 'template', 'dashboard.html');
-      const templateContent = fs.readFileSync(templatePath, 'utf-8');
-      const errorHtml = `<div class="text-danger text-danger-wrapper"><ul><li>${errorMessage}</li></ul></div>`;
-      let htmlContent = templateContent.replace('{{ data }}', Buffer.from(clientData).toString('base64'));
-      htmlContent = htmlContent.replace('<div class="row div-content-center">', `${errorHtml}<div class="row div-content-center">`);
-
-      return new Response(htmlContent, {
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
-
+    // @note For login, we return success and let Growtopia Server validate
+    // If user doesn't exist on server, server auto-creates them
+    // But we still track this as a potential "failed" attempt if we want
+    // For now, we trust the client since Growtopia Server does real validation
     resetAttempts(clientIp);
 
     const token = Buffer.from(
@@ -262,6 +292,51 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
 // @note checktoken redirect
 app.all('/player/growid/checktoken', ({ redirect }) => {
   return redirect('/player/growid/validate/checktoken', 307);
+});
+
+// @note sync/register endpoint - called by Growtopia Server when user auto-creates
+// This records registration data for tracking (emails, etc)
+app.post('/api/sync/register', async ({ body }) => {
+  try {
+    const bodyObj = body as Record<string, string>;
+    const growId = bodyObj.growid;
+    const email = bodyObj.email || null;
+
+    if (!growId) {
+      return new Response(JSON.stringify({ status: 'error', message: 'Missing growid' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // @note Check if already synced (avoid duplicates)
+    const [existing]: any = await pool.query('SELECT id FROM peer WHERE growid = ? LIMIT 1', [growId]);
+    if (existing.length > 0) {
+      return new Response(JSON.stringify({ status: 'success', message: 'Already synced' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // @note Save registration data for tracking
+    await pool.query(
+      'INSERT INTO peer (growid, email) VALUES (?, ?)',
+      [growId, email]
+    );
+
+    console.log(`[SYNC] Registration synced: ${growId}${email ? ` (${email})` : ''}`);
+
+    return new Response(JSON.stringify({ status: 'success', message: 'Registration synced' }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error(`[SYNC ERROR]: ${error}`);
+    return new Response(JSON.stringify({ status: 'error', message: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 });
 
 // @note start server
