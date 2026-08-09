@@ -314,27 +314,27 @@ app.post('/player/growid/checktoken', async ({ request }) => {
       });
     }
 
+    // @note Decode and extract credentials
     let decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
     console.log(`[CHECKTOKEN] Decoded refreshToken: ${decodedRefreshToken}`);
 
-    // @note remove &reg=0/1 from decodedRefreshToken if available
-    if (decodedRefreshToken.includes('&reg=0')) {
-      decodedRefreshToken = decodedRefreshToken.replace('&reg=0', '');
-    } else if (decodedRefreshToken.includes('&reg=1')) {
-      decodedRefreshToken = decodedRefreshToken.replace('&reg=1', '');
-    }
+    // @note Parse the refreshToken to get growId and password
+    const refreshParams = new URLSearchParams(decodedRefreshToken);
+    const growId = refreshParams.get('growId') || '';
+    const password = refreshParams.get('password') || '';
 
-    const token = Buffer.from(
-      decodedRefreshToken.replace(
-        /(_token=)[^&]*/,
-        `$1${Buffer.from(clientData).toString('base64')}`,
-      ),
+    // @note Get the _token from clientData (it's the base64 encoded client info)
+    const originalToken = Buffer.from(clientData).toString('base64');
+
+    // @note Build the new token with current client data
+    const newToken = Buffer.from(
+      `_token=${originalToken}&growId=${growId}&password=${password}&reg=0`
     ).toString('base64');
 
     return new Response(JSON.stringify({
       status: 'success',
       message: 'Account Validated.',
-      token,
+      token: newToken,
       url: '',
       accountType: 'growtopia',
       accountAge: 2,
@@ -371,25 +371,27 @@ app.post('/player/growid/validate/checktoken', async ({ request }) => {
       });
     }
 
+    // @note Decode and extract credentials
     let decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
+    console.log(`[CHECKTOKEN] Decoded refreshToken: ${decodedRefreshToken}`);
 
-    if (decodedRefreshToken.includes('&reg=0')) {
-      decodedRefreshToken = decodedRefreshToken.replace('&reg=0', '');
-    } else if (decodedRefreshToken.includes('&reg=1')) {
-      decodedRefreshToken = decodedRefreshToken.replace('&reg=1', '');
-    }
+    // @note Parse the refreshToken to get growId and password
+    const refreshParams = new URLSearchParams(decodedRefreshToken);
+    const growId = refreshParams.get('growId') || '';
+    const password = refreshParams.get('password') || '';
 
-    const token = Buffer.from(
-      decodedRefreshToken.replace(
-        /(_token=)[^&]*/,
-        `$1${Buffer.from(clientData).toString('base64')}`,
-      ),
+    // @note Get the _token from clientData (it's the base64 encoded client info)
+    const originalToken = Buffer.from(clientData).toString('base64');
+
+    // @note Build the new token with current client data
+    const newToken = Buffer.from(
+      `_token=${originalToken}&growId=${growId}&password=${password}&reg=0`
     ).toString('base64');
 
     return new Response(JSON.stringify({
       status: 'success',
       message: 'Account Validated.',
-      token,
+      token: newToken,
       url: '',
       accountType: 'growtopia',
       accountAge: 2,
