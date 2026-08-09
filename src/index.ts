@@ -179,15 +179,7 @@ app.post('/player/growid/login/validate', async ({ request }) => {
         `_token=${_token}&growId=${growId}&password=${password}&reg=1`,
       ).toString('base64');
 
-      return new Response(JSON.stringify({
-        status: 'success',
-        message: 'Account created successfully.',
-        token,
-        url: '',
-        accountType: 'growtopia',
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return Response.redirect(`https://login.growtopiagame.com/player/validate/close?token=${token}`, 302);
     }
 
     // @note Login flow (no email field)
@@ -218,15 +210,7 @@ app.post('/player/growid/login/validate', async ({ request }) => {
       `_token=${_token}&growId=${growId}&password=${password}&reg=0`,
     ).toString('base64');
 
-    return new Response(JSON.stringify({
-      status: 'success',
-      message: 'Account Validated.',
-      token,
-      url: '',
-      accountType: 'growtopia',
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return Response.redirect(`https://login.growtopiagame.com/player/validate/close?token=${token}`, 302);
   } catch (error) {
     console.log(`[ERROR]: ${error}`);
     return new Response(JSON.stringify({ status: 'error', message: 'Internal Server Error' }), {
