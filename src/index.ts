@@ -291,11 +291,14 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
       ),
     ).toString('base64');
 
+    // @note Return game server URL so client can reconnect
+    const gameServerUrl = process.env.GAMESERVER_URL || 'http://vyartha-login.ratival.com';
+
     return new Response(JSON.stringify({
       status: 'success',
       message: 'Account Validated.',
       token,
-      url: '',
+      url: gameServerUrl,
       accountType: 'growtopia',
       accountAge: 2,
     }), {
@@ -351,11 +354,14 @@ app.post('/player/growid/checktoken', async ({ request }) => {
       `_token=${originalToken}&growId=${growId}&password=${password}&reg=0`
     ).toString('base64');
 
+    // @note Return game server URL so client can reconnect
+    const gameServerUrl = process.env.GAMESERVER_URL || 'http://vyartha-login.ratival.com';
+
     return new Response(JSON.stringify({
       status: 'success',
       message: 'Account Validated.',
       token: newToken,
-      url: '',
+      url: gameServerUrl,
       accountType: 'growtopia',
       accountAge: 2,
     }), {
@@ -408,11 +414,14 @@ app.post('/player/growid/validate/checktoken', async ({ request }) => {
       `_token=${originalToken}&growId=${growId}&password=${password}&reg=0`
     ).toString('base64');
 
+    // @note Return game server URL so client can reconnect
+    const gameServerUrl = process.env.GAMESERVER_URL || 'http://vyartha-login.ratival.com';
+
     return new Response(JSON.stringify({
       status: 'success',
       message: 'Account Validated.',
       token: newToken,
-      url: '',
+      url: gameServerUrl,
       accountType: 'growtopia',
       accountAge: 2,
     }), {
