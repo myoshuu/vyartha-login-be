@@ -73,26 +73,32 @@ app.get('/', () => {
 });
 
 // @note dashboard endpoint - serves login HTML page with client data
-app.post('/player/login/dashboard', async ({ request }) => {
+// Uses app.all() to handle both GET and POST (matches original GTLogin)
+app.all('/player/login/dashboard', async ({ request }) => {
   let clientData = '';
 
-  // @note Read body manually
+  // @note Read body if present
   const bodyText = await request.text();
   console.log(`[DASHBOARD] Body: ${bodyText.substring(0, 100)}...`);
 
-  // @note Parse as URLSearchParams
-  const params = new URLSearchParams(bodyText);
-  const _token = params.get('_token') || '';
-
-  if (_token) {
-    // @note If _token exists, use it directly
-    clientData = _token;
-  } else {
-    // @note Otherwise, use the raw body as client data
+  // @note Handle different body formats
+  // Original GTLogin expects: { "key1|val1\nkey2|val2\n...": "" }
+  if (bodyText) {
     try {
-      clientData = decodeURIComponent(bodyText);
-    } catch (e) {
-      clientData = bodyText;
+      // Try JSON format first (original GTLogin format)
+      const jsonBody = JSON.parse(bodyText);
+      if (jsonBody && typeof jsonBody === 'object' && Object.keys(jsonBody).length > 0) {
+        clientData = Object.keys(jsonBody)[0];
+      }
+    } catch {
+      // Fallback to URLSearchParams format
+      const params = new URLSearchParams(bodyText);
+      const _token = params.get('_token') || '';
+      if (_token) {
+        clientData = _token;
+      } else {
+        clientData = bodyText;
+      }
     }
   }
 
@@ -109,7 +115,8 @@ app.post('/player/login/dashboard', async ({ request }) => {
 });
 
 // @note validate login endpoint (handles both login and register)
-app.post('/player/growid/login/validate', async ({ request }) => {
+// Uses app.all() to match original GTLogin behavior
+app.all('/player/growid/login/validate', async ({ request }) => {
   const clientIp = getClientIp(request);
 
   const { blocked } = checkIpBlocked(clientIp);
@@ -242,7 +249,8 @@ app.post('/player/growid/login/validate', async ({ request }) => {
 
 // @note checktoken endpoint - validates token and returns updated token
 // Matches ORIGINAL GTLogin behavior - returns JSON with new token, NOT game server info
-app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
+// Uses app.all() to match original GTLogin behavior
+app.all('/player/growid/validate/checktoken', async ({ body, request }) => {
   try {
     let refreshToken: string | undefined;
     let clientData: string | undefined;
@@ -331,7 +339,8 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
 // @note Alternative checktoken route - some Growtopia clients use this path
 // Original GTLogin: /player/growid/checktoken redirects to /player/growid/validate/checktoken
 // We handle it directly to avoid redirect issues
-app.post('/player/growid/checktoken', async ({ request }) => {
+// Uses app.all() to match original GTLogin behavior
+app.all('/player/growid/checktoken', async ({ request }) => {
   try {
     let refreshToken: string | undefined;
     let clientData: string | undefined;
