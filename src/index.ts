@@ -343,6 +343,94 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
   }
 });
 
+// @note Alternative checktoken route - some Growtopia clients use this path
+app.post('/player/growid/checktoken', async ({ request }) => {
+  try {
+    let refreshToken: string | undefined;
+    let clientData: string | undefined;
+
+    // @note Read body manually since Elysia doesn't auto-parse form data
+    const bodyText = await request.text();
+    console.log(`[CHECKTOKEN-ALT] Body: ${bodyText}`);
+
+    if (bodyText) {
+      const params = new URLSearchParams(bodyText);
+      refreshToken = params.get('refreshToken') || undefined;
+      clientData = params.get('clientData') || undefined;
+    }
+
+    console.log(`[CHECKTOKEN-ALT] Parsed - refreshToken: ${refreshToken ? 'exists' : 'missing'}, clientData: ${clientData ? 'exists' : 'missing'}`);
+
+    if (!refreshToken || !clientData) {
+      console.log(`[ERROR-ALT]: Missing refreshToken or clientData`);
+      return new Response('error|Missing login credentials', {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
+    // @note Decode and extract credentials from refreshToken
+    let decodedRefreshToken: string;
+    try {
+      decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
+      console.log(`[CHECKTOKEN-ALT] Decoded refreshToken: ${decodedRefreshToken}`);
+    } catch (e) {
+      console.log(`[ERROR-ALT]: Failed to decode refreshToken: ${e}`);
+      return new Response('error|Invalid token format', {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
+    // @note Parse the refreshToken to get growId and password
+    const refreshParams = new URLSearchParams(decodedRefreshToken);
+    const growId = refreshParams.get('growId') || '';
+    const password = refreshParams.get('password') || '';
+
+    if (!growId || !password) {
+      console.log(`[ERROR-ALT]: Missing growId or password in token`);
+      return new Response('error|Missing credentials', {
+        headers: { 'Content-Type': 'text/plain' },
+      });
+    }
+
+    // @note Validate credentials against the database
+    try {
+      const [rows]: any = await pool.query(
+        'SELECT uid FROM peer WHERE growid = ? AND password = ? LIMIT 1',
+        [growId, password]
+      );
+
+      if (rows.length === 0) {
+        console.log(`[CHECKTOKEN-ALT] Invalid credentials for growId: ${growId}`);
+        return new Response('error|Invalid GrowID or password', {
+          headers: { 'Content-Type': 'text/plain' },
+        });
+      }
+
+      console.log(`[CHECKTOKEN-ALT] Credentials validated for growId: ${growId}`);
+    } catch (dbError) {
+      console.log(`[CHECKTOKEN-ALT] Database error: ${dbError}`);
+    }
+
+    // @note Return game server info in Growtopia format
+    const gameServerHost = process.env.GAMESERVER_HOST || 'vyartha-login.ratival.com';
+    const gameServerPort = process.env.GAMESERVER_PORT || '17091';
+
+    const gtResponse = `server|${gameServerHost}\nport|${gameServerPort}\ntype|1\n`;
+
+    console.log(`[CHECKTOKEN-ALT] Returning GT format response: ${gtResponse.replace('\n', ' ')}`);
+
+    return new Response(gtResponse, {
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  } catch (error) {
+    console.log(`[ERROR-ALT]: ${error}`);
+    return new Response('error|Internal server error', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  }
+});
+
 // @note sync/register endpoint - called by Growtopia Server when user auto-creates
 // This records registration data for tracking (emails, etc)
 app.post('/api/sync/register', async ({ body }) => {
