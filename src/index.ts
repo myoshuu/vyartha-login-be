@@ -291,27 +291,10 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
       });
     }
 
-    // @note Validate credentials against the database
-    // Query the server database to verify the GrowID exists
-    try {
-      const [rows]: any = await pool.query(
-        'SELECT uid FROM peer WHERE growid = ? AND password = ? LIMIT 1',
-        [growId, password]
-      );
-
-      if (rows.length === 0) {
-        console.log(`[CHECKTOKEN] Invalid credentials for growId: ${growId}`);
-        return new Response('error|Invalid GrowID or password', {
-          headers: { 'Content-Type': 'text/plain' },
-        });
-      }
-
-      console.log(`[CHECKTOKEN] Credentials validated for growId: ${growId}`);
-    } catch (dbError) {
-      console.log(`[CHECKTOKEN] Database error: ${dbError}`);
-      // @note On database error, still allow login (trust the token)
-      // The game server will do its own validation
-    }
+    // @note Skip database validation since the game server does its own validation
+    // The login backend database is only for tracking registrations, not authentication
+    // The game server's vyartha database has the actual peer credentials
+    console.log(`[CHECKTOKEN] Skipping DB validation - game server will validate credentials`);
 
     // @note Get the _token from clientData (it's the base64 encoded client info)
     const originalToken = Buffer.from(clientData).toString('base64');
@@ -392,24 +375,10 @@ app.post('/player/growid/checktoken', async ({ request }) => {
       });
     }
 
-    // @note Validate credentials against the database
-    try {
-      const [rows]: any = await pool.query(
-        'SELECT uid FROM peer WHERE growid = ? AND password = ? LIMIT 1',
-        [growId, password]
-      );
-
-      if (rows.length === 0) {
-        console.log(`[CHECKTOKEN-ALT] Invalid credentials for growId: ${growId}`);
-        return new Response('error|Invalid GrowID or password', {
-          headers: { 'Content-Type': 'text/plain' },
-        });
-      }
-
-      console.log(`[CHECKTOKEN-ALT] Credentials validated for growId: ${growId}`);
-    } catch (dbError) {
-      console.log(`[CHECKTOKEN-ALT] Database error: ${dbError}`);
-    }
+    // @note Skip database validation since the game server does its own validation
+    // The login backend database is only for tracking registrations, not authentication
+    // The game server's vyartha database has the actual peer credentials
+    console.log(`[CHECKTOKEN-ALT] Skipping DB validation - game server will validate credentials`);
 
     // @note Return game server info in Growtopia format
     const gameServerHost = process.env.GAMESERVER_HOST || 'vyartha-login.ratival.com';
