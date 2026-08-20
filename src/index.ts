@@ -240,30 +240,36 @@ app.post('/player/growid/login/validate', async ({ request }) => {
   }
 });
 
-// @note checktoken endpoint - validates token and returns game server info in Growtopia format
-// This is the SINGLE handler for checktoken - consolidated from duplicate handlers
+// @note checktoken endpoint - validates token and returns updated token
+// Matches ORIGINAL GTLogin behavior - returns JSON with new token, NOT game server info
 app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
   try {
     let refreshToken: string | undefined;
     let clientData: string | undefined;
+    let source = 'empty';
 
     // @note Read body manually since Elysia doesn't auto-parse form data
     const bodyText = await request.text();
-    console.log(`[CHECKTOKEN] Body: ${bodyText}`);
+    console.log(`[CHECKTOKEN] Body: ${bodyText.substring(0, 200)}...`);
 
     if (bodyText) {
       const params = new URLSearchParams(bodyText);
       refreshToken = params.get('refreshToken') || undefined;
       clientData = params.get('clientData') || undefined;
+      if (refreshToken || clientData) {
+        source = 'url-search-params';
+      }
     }
 
-    console.log(`[CHECKTOKEN] Parsed - refreshToken: ${refreshToken ? 'exists' : 'missing'}, clientData: ${clientData ? 'exists' : 'missing'}`);
+    console.log(`[CHECKTOKEN] Parsed as ${source}`);
 
     if (!refreshToken || !clientData) {
       console.log(`[ERROR]: Missing refreshToken or clientData`);
-      // @note Return error in Growtopia format so client handles it properly
-      return new Response('error|Missing login credentials', {
-        headers: { 'Content-Type': 'text/plain' },
+      return new Response(JSON.stringify({
+        status: 'error',
+        message: 'Missing refreshToken or clientData'
+      }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -271,62 +277,60 @@ app.post('/player/growid/validate/checktoken', async ({ body, request }) => {
     let decodedRefreshToken: string;
     try {
       decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
-      console.log(`[CHECKTOKEN] Decoded refreshToken: ${decodedRefreshToken}`);
+      console.log(`[CHECKTOKEN] Decoded refreshToken: ${decodedRefreshToken.substring(0, 100)}...`);
     } catch (e) {
       console.log(`[ERROR]: Failed to decode refreshToken: ${e}`);
-      return new Response('error|Invalid token format', {
-        headers: { 'Content-Type': 'text/plain' },
+      return new Response(JSON.stringify({
+        status: 'error',
+        message: 'Invalid token format'
+      }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // @note Parse the refreshToken to get growId and password
-    const refreshParams = new URLSearchParams(decodedRefreshToken);
-    const growId = refreshParams.get('growId') || '';
-    const password = refreshParams.get('password') || '';
-
-    if (!growId || !password) {
-      console.log(`[ERROR]: Missing growId or password in token`);
-      return new Response('error|Missing credentials', {
-        headers: { 'Content-Type': 'text/plain' },
-      });
+    // @note Remove &reg=0/1 from decodedRefreshToken if available
+    if (decodedRefreshToken.includes('&reg=0')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=0', '');
+    } else if (decodedRefreshToken.includes('&reg=1')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=1', '');
     }
 
-    // @note Skip database validation since the game server does its own validation
-    // The login backend database is only for tracking registrations, not authentication
-    // The game server's vyartha database has the actual peer credentials
-    console.log(`[CHECKTOKEN] Skipping DB validation - game server will validate credentials`);
-
-    // @note Get the _token from clientData (it's the base64 encoded client info)
-    const originalToken = Buffer.from(clientData).toString('base64');
-
-    // @note Build the new token with current client data
-    const newToken = Buffer.from(
-      `_token=${originalToken}&growId=${growId}&password=${password}&reg=0`
+    // @note Build the new token with updated client data
+    // This is the ORIGINAL GTLogin behavior - return a new token, not game server info
+    const token = Buffer.from(
+      decodedRefreshToken.replace(
+        /(_token=)[^&]*/,
+        `$1${Buffer.from(clientData).toString('base64')}`,
+      ),
     ).toString('base64');
 
-    // @note Return game server info in Growtopia format
-    // The Growtopia client expects this specific format to connect to the game server
-    const gameServerHost = process.env.GAMESERVER_HOST || 'vyartha-login.ratival.com';
-    const gameServerPort = process.env.GAMESERVER_PORT || '17091';
+    console.log(`[CHECKTOKEN] Returning new token`);
 
-    // @note Growtopia client expects this format
-    const gtResponse = `server|${gameServerHost}\nport|${gameServerPort}\ntype|1\n`;
-
-    console.log(`[CHECKTOKEN] Returning GT format response: ${gtResponse.replace('\n', ' ')}`);
-
-    return new Response(gtResponse, {
-      headers: { 'Content-Type': 'text/plain' },
+    // @note Return JSON with token (ORIGINAL GTLogin format)
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'Account Validated.',
+      token,
+      url: '',
+      accountType: 'growtopia',
+      accountAge: 2,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.log(`[ERROR]: ${error}`);
-    return new Response('error|Internal server error', {
-      status: 500,
-      headers: { 'Content-Type': 'text/plain' },
+    return new Response(JSON.stringify({
+      status: 'error',
+      message: 'Internal Server Error'
+    }), {
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 });
 
 // @note Alternative checktoken route - some Growtopia clients use this path
+// Original GTLogin: /player/growid/checktoken redirects to /player/growid/validate/checktoken
+// We handle it directly to avoid redirect issues
 app.post('/player/growid/checktoken', async ({ request }) => {
   try {
     let refreshToken: string | undefined;
@@ -334,7 +338,7 @@ app.post('/player/growid/checktoken', async ({ request }) => {
 
     // @note Read body manually since Elysia doesn't auto-parse form data
     const bodyText = await request.text();
-    console.log(`[CHECKTOKEN-ALT] Body: ${bodyText}`);
+    console.log(`[CHECKTOKEN-ALT] Body: ${bodyText.substring(0, 200)}...`);
 
     if (bodyText) {
       const params = new URLSearchParams(bodyText);
@@ -346,8 +350,11 @@ app.post('/player/growid/checktoken', async ({ request }) => {
 
     if (!refreshToken || !clientData) {
       console.log(`[ERROR-ALT]: Missing refreshToken or clientData`);
-      return new Response('error|Missing login credentials', {
-        headers: { 'Content-Type': 'text/plain' },
+      return new Response(JSON.stringify({
+        status: 'error',
+        message: 'Missing refreshToken or clientData'
+      }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
@@ -355,47 +362,53 @@ app.post('/player/growid/checktoken', async ({ request }) => {
     let decodedRefreshToken: string;
     try {
       decodedRefreshToken = Buffer.from(refreshToken, 'base64').toString('utf-8');
-      console.log(`[CHECKTOKEN-ALT] Decoded refreshToken: ${decodedRefreshToken}`);
+      console.log(`[CHECKTOKEN-ALT] Decoded refreshToken: ${decodedRefreshToken.substring(0, 100)}...`);
     } catch (e) {
       console.log(`[ERROR-ALT]: Failed to decode refreshToken: ${e}`);
-      return new Response('error|Invalid token format', {
-        headers: { 'Content-Type': 'text/plain' },
+      return new Response(JSON.stringify({
+        status: 'error',
+        message: 'Invalid token format'
+      }), {
+        headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // @note Parse the refreshToken to get growId and password
-    const refreshParams = new URLSearchParams(decodedRefreshToken);
-    const growId = refreshParams.get('growId') || '';
-    const password = refreshParams.get('password') || '';
-
-    if (!growId || !password) {
-      console.log(`[ERROR-ALT]: Missing growId or password in token`);
-      return new Response('error|Missing credentials', {
-        headers: { 'Content-Type': 'text/plain' },
-      });
+    // @note Remove &reg=0/1 from decodedRefreshToken if available
+    if (decodedRefreshToken.includes('&reg=0')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=0', '');
+    } else if (decodedRefreshToken.includes('&reg=1')) {
+      decodedRefreshToken = decodedRefreshToken.replace('&reg=1', '');
     }
 
-    // @note Skip database validation since the game server does its own validation
-    // The login backend database is only for tracking registrations, not authentication
-    // The game server's vyartha database has the actual peer credentials
-    console.log(`[CHECKTOKEN-ALT] Skipping DB validation - game server will validate credentials`);
+    // @note Build the new token with updated client data
+    // This is the ORIGINAL GTLogin behavior - return a new token, not game server info
+    const token = Buffer.from(
+      decodedRefreshToken.replace(
+        /(_token=)[^&]*/,
+        `$1${Buffer.from(clientData).toString('base64')}`,
+      ),
+    ).toString('base64');
 
-    // @note Return game server info in Growtopia format
-    const gameServerHost = process.env.GAMESERVER_HOST || 'vyartha-login.ratival.com';
-    const gameServerPort = process.env.GAMESERVER_PORT || '17091';
+    console.log(`[CHECKTOKEN-ALT] Returning new token`);
 
-    const gtResponse = `server|${gameServerHost}\nport|${gameServerPort}\ntype|1\n`;
-
-    console.log(`[CHECKTOKEN-ALT] Returning GT format response: ${gtResponse.replace('\n', ' ')}`);
-
-    return new Response(gtResponse, {
-      headers: { 'Content-Type': 'text/plain' },
+    // @note Return JSON with token (ORIGINAL GTLogin format)
+    return new Response(JSON.stringify({
+      status: 'success',
+      message: 'Account Validated.',
+      token,
+      url: '',
+      accountType: 'growtopia',
+      accountAge: 2,
+    }), {
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.log(`[ERROR-ALT]: ${error}`);
-    return new Response('error|Internal server error', {
-      status: 500,
-      headers: { 'Content-Type': 'text/plain' },
+    return new Response(JSON.stringify({
+      status: 'error',
+      message: 'Internal Server Error'
+    }), {
+      headers: { 'Content-Type': 'application/json' },
     });
   }
 });
